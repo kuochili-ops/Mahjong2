@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>麻將十點半對決 (終結僵局完美版)</title>
+    <title>麻將十點半對決 (極簡手遊介面版)</title>
     <style>
         :root {
             --bg-color: #123c10;
             --gap: 4px;
-            --tile-h: 7.4vh; 
+            --tile-h: 7.8vh; 
             --tile-w: calc(var(--tile-h) * 0.76); 
             --base-url: "https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/Vectors%20%E7%9F%A2%E9%87%8F%E5%9B%BE/SVG/";
         }
@@ -34,36 +34,54 @@
             display: flex; 
             flex-direction: column; 
             align-items: center;
-            justify-content: space-between; 
+            justify-content: center; /* 讓棋盤置中 */
             height: 100vh; 
             height: 100dvh; 
-            padding: 12px 5px;
+            padding: 10px 5px;
             touch-action: manipulation; 
             font-family: "Microsoft JhengHei", -apple-system, sans-serif;
             color: #fff;
             overflow: hidden; 
         }
 
-        /* 得分與狀態面板 */
-        .score-panel {
+        /* 4x9 棋盤主體 */
+        .board {
+            position: relative;
             width: calc(var(--tile-w) * 4 + var(--gap) * 5);
+            height: calc(var(--tile-h) * 9 + var(--gap) * 10);
+            background: #091f09; 
+            border-radius: 12px; 
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.5);
+            flex-grow: 0;
+            flex-shrink: 0;
+        }
+
+        /* 半透明動態狀態面板（懸浮於牌盤上方） */
+        .score-panel {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            right: 6px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(0, 0, 0, 0.65); /* 半透明黑 */
+            backdrop-filter: blur(4px); /* 毛玻璃特效 */
+            -webkit-backdrop-filter: blur(4px);
             padding: 6px 12px;
             border-radius: 8px;
-            margin-bottom: 4px;
-            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 100; /* 確保浮在最上方 */
+            pointer-events: none; /* 穿透點擊，不擋住下方的牌 */
         }
         .score-box {
             display: flex;
             flex-direction: column;
             align-items: center;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
         }
         .score-box span:nth-child(2) {
-            font-size: 1.2rem;
+            font-size: 1.15rem;
             color: #ffeb3b;
             font-weight: bold;
         }
@@ -75,39 +93,26 @@
         }
         #turn-indicator {
             background: #ff5722;
-            padding: 3px 12px;
-            border-radius: 15px;
+            padding: 2px 10px;
+            border-radius: 12px;
             font-weight: bold;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
             transition: background 0.3s;
         }
-        /* 殘局步數倒數警告器 */
         #sudden-death-counter {
-            font-size: 0.72rem;
+            font-size: 0.68rem;
             background: #d32f2f;
             color: #fff;
-            padding: 1px 8px;
-            border-radius: 10px;
+            padding: 1px 6px;
+            border-radius: 8px;
             font-weight: bold;
-            display: none; /* 預設不顯示 */
+            display: none; 
             animation: pulse 1s infinite alternate;
         }
         @keyframes pulse {
             0% { transform: scale(0.95); opacity: 0.8; }
             100% { transform: scale(1.05); opacity: 1; }
-        }
-
-        /* 4x9 棋盤 */
-        .board {
-            position: relative;
-            width: calc(var(--tile-w) * 4 + var(--gap) * 5);
-            height: calc(var(--tile-h) * 9 + var(--gap) * 10);
-            background: #091f09; 
-            border-radius: 8px; 
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.7), 0 3px 10px rgba(0,0,0,0.4);
-            flex-grow: 0;
-            flex-shrink: 0;
         }
 
         /* 麻將牌 */
@@ -179,6 +184,7 @@
             100% { transform: translate(var(--tx), var(--ty)) scale(0.3); opacity: 0; filter: blur(3px); }
         }
 
+        /* 插槽提示 */
         .slot-target {
             position: absolute; 
             width: var(--tile-w); 
@@ -194,17 +200,7 @@
             z-index: 15;
         }
 
-        .tips-area {
-            width: calc(var(--tile-w) * 4 + var(--gap) * 5);
-            background: rgba(0,0,0,0.3);
-            padding: 6px;
-            border-radius: 8px;
-            font-size: 0.75rem; 
-            color: #ccc; 
-            text-align: center;
-            line-height: 1.3;
-        }
-
+        /* 彈窗畫面 */
         #start-screen, #over-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
@@ -227,8 +223,8 @@
 
 <div id="start-screen">
     <div class="menu-box">
-        <h2>𓃥 麻將十點半對決 (長程版)</h2>
-        <p>【玩法規則簡介】<br>
+        <h2>𓃥 麻將十點半對決</h2>
+        <p>【盲翻與無限格移動玩法】<br>
         1. <b>盲抽翻牌</b>：任意點擊一張蓋牌將其翻開，與相鄰牌湊成 10 即消除得分。<br>
         2. <b>長程推牌</b>：只要同一直線上無阻擋，亮牌可移動任意格數！<br>
         3. <b>殘局終結機制</b>：當所有牌被翻開後，將啟動<b>「15步進攻倒數」</b>，若連續15步沒有發生任何消除，對局將強制和平終止，防範無限互相迴避！
@@ -237,26 +233,21 @@
     </div>
 </div>
 
-<div class="score-panel">
-    <div class="score-box">
-        <span>玩家得分</span>
-        <span id="player-score">0</span>
+<div id="game-board" class="board">
+    <div class="score-panel">
+        <div class="score-box">
+            <span>玩家得分</span>
+            <span id="player-score">0</span>
+        </div>
+        <div class="center-status">
+            <div id="turn-indicator">玩家回合</div>
+            <div id="sudden-death-counter">進攻倒數: 15步</div>
+        </div>
+        <div class="score-box">
+            <span>電腦得分</span>
+            <span id="computer-score">0</span>
+        </div>
     </div>
-    <div class="center-status">
-        <div id="turn-indicator">玩家回合</div>
-        <div id="sudden-death-counter">進攻倒數: 15步</div>
-    </div>
-    <div class="score-box">
-        <span>電腦得分</span>
-        <span id="computer-score">0</span>
-    </div>
-</div>
-
-<div id="game-board" class="board"></div>
-
-<div class="tips-area">
-    點擊<b>暗牌</b>翻牌；點擊<b>亮牌</b>後，可直線移動<b>任意格數</b>到綠色空格中。<br>
-    注意：灰色陰影的牌代表剛被對方移動過，本回合無法移動。
 </div>
 
 <div id="over-screen" style="display:none;">
@@ -281,9 +272,8 @@
     let slotTargets = [];
     let lastMovedTile = null; 
 
-    // 新增：殘局限制步數變數
     let endgameMovesLeft = 15;
-    let isForcedEnd = false; // 是否因為倒數完結而強制收局
+    let isForcedEnd = false; 
 
     const boardEl = document.getElementById('game-board');
 
@@ -322,7 +312,11 @@
     }
 
     function setupSlotsUI() {
+        // 保留原本就在裡面的 score-panel
+        const panel = boardEl.querySelector('.score-panel');
         boardEl.innerHTML = '';
+        boardEl.appendChild(panel);
+
         slotTargets = [];
         const stepW = boardEl.offsetWidth / COLS;
         const stepH = boardEl.offsetHeight / ROWS;
@@ -410,8 +404,6 @@
         obj.el.classList.add('faceup');
         
         lastMovedTile = null; 
-        
-        // 翻牌不算在移動消耗步數內，所以不扣減倒數
         endActionAndCheckMatch(obj.r, obj.c, side, false);
     }
 
@@ -446,7 +438,6 @@
         syncTileDOMPosition(obj);
         lastMovedTile = obj; 
 
-        // 移動牌動作，如果已經進入純殘局，則扣減一步
         let isMoveConsumed = (getFacedownTiles().length === 0);
         if (isMoveConsumed) {
             endgameMovesLeft--;
@@ -467,7 +458,6 @@
         }
     }
 
-    // 新增：動態檢查並控制殘局指標 UI 顯示
     function checkAndShowCountdownUI() {
         const countIndicator = document.getElementById('sudden-death-counter');
         if (getFacedownTiles().length === 0) {
@@ -526,7 +516,6 @@
             scores[side] += 2;
             updateScoresUI();
 
-            // 核心規則：只要有人成功湊十消除，倒數立即「重置回 15 步」，獎勵積極進攻！
             endgameMovesLeft = 15;
 
             await new Promise(res => setTimeout(res, 350));
@@ -534,7 +523,6 @@
             matchPartner.el.remove();
         }
 
-        // 每次動作完結更新一次倒數指標
         checkAndShowCountdownUI();
         turnShift();
     }
@@ -552,7 +540,6 @@
         }
     }
 
-    // ================= 電腦 AI (加入僵局倒數感知) =================
     async function startComputerTurn() {
         currentTurn = 'computer';
         gameState = 'busy';
@@ -562,13 +549,11 @@
         
         await new Promise(res => setTimeout(res, 800));
 
-        // 如果倒數已經完了，直接交由判定去收尾
         if (isForcedEnd) {
             turnShift();
             return;
         }
 
-        // 1. 優先嘗試移動牌直接湊十消除
         const bestMove = evaluateAIBestMove();
         if (bestMove) {
             const { obj, nr, nc } = bestMove;
@@ -584,7 +569,6 @@
             return;
         }
 
-        // 2. 次優先：盲翻蓋牌
         const faceDownTiles = getFacedownTiles();
         if (faceDownTiles.length > 0) {
             const randomPick = faceDownTiles[Math.floor(Math.random() * faceDownTiles.length)];
@@ -593,7 +577,6 @@
             return;
         }
 
-        // 3. 隨機遠程移動亮牌
         const allMoves = getAllLegalMoves();
         if (allMoves.length > 0) {
             const rMove = allMoves[Math.floor(Math.random() * allMoves.length)];
@@ -669,9 +652,7 @@
     }
 
     function checkGameOverCondition() {
-        // 如果步數強行歸零，直接判斷結束
         if (isForcedEnd) return true;
-
         if (getFacedownTiles().length > 0) return false;
         if (getAllLegalMoves().length === 0) return true;
 
