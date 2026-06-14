@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>麻將十點半對決 (長程移動版)</title>
+    <style>
+        :root {
+            --bg-color: #123c10;
+            --gap: 4px;
+            --tile-h: 7.5vh; 
+            --tile-w: calc(var(--tile-h) * 0.76); 
+            --base-url: "https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/Vectors%20%E7%9F%A2%E9%87%8F%E5%9B%BE/SVG/";
+        }
+        
+        @media (max-aspect-ratio: 1:2) and (max-width: 450px) {
+            :root {
+                --tile-w: 21vw;
+                --tile-h: calc(var(--tile-w) * 1.31);
+                --gap: 1vw;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            display: flex; 
+            flex-direction: column; 
+            align-items: center;
+            justify-content: space-between; 
+            height: 100vh; 
+            height: 100dvh; 
+            padding: 12px 5px;
+            touch-action: manipulation; 
+            font-family: "Microsoft JhengHei", -apple-system, sans-serif;
+            color: #fff;
+            overflow: hidden; 
+        }
+
+        /* 簡化後的得分面板 */
+        .score-panel {
+            width: calc(var(--tile-w) * 4 + var(--gap) * 5);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 6px 12px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+        }
+        .score-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.8rem;
+        }
+        .score-box span:nth-child(2) {
+            font-size: 1.2rem;
+            color: #ffeb3b;
+            font-weight: bold;
+        }
+        #turn-indicator {
+            background: #ff5722;
+            padding: 4px 14px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            transition: background 0.3s;
+        }
+
+        /* 4x9 棋盤 */
+        .board {
+            position: relative;
+            width: calc(var(--tile-w) * 4 + var(--gap) * 5);
+            height: calc(var(--tile-h) * 9 + var(--gap) * 10);
+            background: #091f09; 
+            border-radius: 8px; 
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.7), 0 3px 10px rgba(0,0,0,0.4);
+            flex-grow: 0;
+            flex-shrink: 0;
+        }
+
+        /* 麻將牌 */
+        .tile {
+            position: absolute; 
+            width: var(--tile-w); 
+            height: var(--tile-h);
+            background: #fff; 
+            border-radius: 5px;
+            box-shadow: 0 3px 0 #bbb, 0 3px 5px rgba(0,0,0,0.3);
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s, filter 0.2s;
+            z-index: 5; 
+            cursor: pointer;
+        }
+        .tile img { 
+            width: 82%; 
+            height: 82%; 
+            pointer-events: none; 
+            display: none; 
+        }
+        
+        /* 蓋牌背影 */
+        .tile.facedown {
+            background: linear-gradient(135deg, #00796b 0%, #004d40 100%);
+            border: 1px solid #004d40;
+            box-shadow: 0 3px 0 #00332c, 0 3px 5px rgba(0,0,0,0.4);
+        }
+        .tile.facedown::after {
+            content: "𓃥";
+            font-size: 1.3rem;
+            color: rgba(255, 235, 59, 0.4);
+        }
+
+        .tile.faceup img {
+            display: block;
+        }
+
+        /* 選取特效 */
+        .tile.selected { 
+            box-shadow: 0 0 10px #ffeb3b, 0 3px 0 #bbb; 
+            z-index: 20; 
+            filter: brightness(1.1);
+        }
+
+        /* 鎖定特效 */
+        .tile.locked {
+            filter: grayscale(0.6) brightness(0.75);
+            cursor: not-allowed;
+            box-shadow: 0 3px 0 #aaa, inset 0 0 6px rgba(244, 67, 54, 0.4);
+        }
+
+        /* 外框閃爍 */
+        .flashing {
+            animation: borderFlash 0.15s ease-in-out 3; 
+            z-index: 25;
+            pointer-events: none;
+        }
+        @keyframes borderFlash {
+            0%, 100% { box-shadow: 0 0 4px #ffeb3b, 0 3px 0 #bbb; filter: brightness(1); }
+            50% { box-shadow: 0 0 20px #ffeb3b, inset 0 0 12px #ffeb3b; filter: brightness(1.4); }
+        }
+
+        /* 消牌粉碎 */
+        .shattering {
+            animation: shatterInPlace 0.35s ease-out forwards;
+            pointer-events: none; 
+            z-index: 30;
+        }
+        @keyframes shatterInPlace {
+            0% { transform: translate(var(--tx), var(--ty)) scale(1); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(0.3); opacity: 0; filter: blur(3px); }
+        }
+
+        /* 長程移動插槽提示 */
+        .slot-target {
+            position: absolute; 
+            width: var(--tile-w); 
+            height: var(--tile-h);
+            background: transparent; 
+            z-index: 1; 
+            cursor: pointer;
+        }
+        .slot-target.move-hint {
+            background: rgba(76, 175, 80, 0.25);
+            border: 2px solid #4caf50;
+            border-radius: 5px;
+            z-index: 15;
+        }
+
+        /* 底部說明文 */
+        .tips-area {
+            width: calc(var(--tile-w) * 4 + var(--gap) * 5);
+            background: rgba(0,0,0,0.3);
+            padding: 6px;
+            border-radius: 8px;
+            font-size: 0.75rem; 
+            color: #ccc; 
+            text-align: center;
+            line-height: 1.3;
+        }
+
+        #start-screen, #over-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 1000; color: white;
+        }
+        .menu-box { 
+            background: #193d1b; 
+            padding: 20px; 
+            border-radius: 12px; 
+            border: 2px solid #ffc107; 
+            text-align: center;
+            max-width: 85%;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.5);
+        }
+        .menu-box h2 { margin-bottom: 6px; font-size: 1.3rem; }
+        .menu-box p { margin-bottom: 15px; color: #ccc; font-size: 0.85rem; line-height: 1.4;}
+    </style>
+</head>
+<body>
+
+<!-- 起始畫面 -->
+<div id="start-screen">
+    <div class="menu-box">
+        <h2>𓃥 麻將十點半對決 (長程版)</h2>
+        <p>【盲翻與無限格移動玩法】<br>
+        1. <b>盲抽翻牌</b>：任意點擊一張蓋牌將其翻開，若與四鄰牌湊成 10 即消除得分。<br>
+        2. <b>長程推牌</b>：產生空格後，可點擊<b>亮牌</b>，只要中途沒有阻擋，就能點擊同一直線上的<b>任何空格</b>滑行過去！湊成 10 同樣得分。<br>
+        3. <b>下一手防守鎖定</b>：對方剛移動過的牌，你下一手<b>不能立即反向移動牠</b>（呈灰色無法選取）。
+        </p>
+        <button class="btn" style="background: linear-gradient(180deg, #4caf50, #388e3c); color:white; border:none; padding:10px 20px; font-size:1rem; font-weight:bold; border-radius:6px; cursor:pointer;" onclick="gameSetup()">進入對局</button>
+    </div>
+</div>
+
+<!-- 計分面板 -->
+<div class="score-panel">
+    <div class="score-box">
+        <span>玩家得分</span>
+        <span id="player-score">0</span>
+    </div>
+    <div id="turn-indicator">玩家回合</div>
+    <div class="score-box">
+        <span>電腦得分</span>
+        <span id="computer-score">0</span>
+    </div>
+</div>
+
+<!-- 4x9 棋盤 -->
+<div id="game-board" class="board"></div>
+
+<!-- 說明文字 -->
+<div class="tips-area">
+    點擊<b>暗牌</b>翻牌；點擊<b>亮牌</b>後，可直線移動<b>任意格數</b>到綠色空格中。<br>
+    注意：灰色陰影的牌代表剛被對方移動過，本回合無法移動。
+</div>
+
+<!-- 結算畫面 -->
+<div id="over-screen" style="display:none;">
+    <div class="menu-box">
+        <h2 id="win-title">遊戲結束</h2>
+        <p id="final-score"></p>
+        <button class="btn" style="background: linear-gradient(180deg, #4caf50, #388e3c); color:white; border:none; padding:10px 20px; font-size:1rem; font-weight:bold; border-radius:6px; cursor:pointer; width:100%;" onclick="location.reload()">再玩一次</button>
+    </div>
+</div>
+
+<script>
+    const ROWS = 9, COLS = 4; 
+    const baseUrl = "https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/Vectors%20%E7%9F%A2%E9%87%8F%E5%9B%BE/SVG/";
+    
+    let currentSuit = 'm';
+    let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+    
+    let scores = { player: 0, computer: 0 };
+    let currentTurn = 'player'; 
+    let gameState = 'playing'; 
+    let selectedTile = null;
+    let slotTargets = [];
+    let lastMovedTile = null; 
+
+    const boardEl = document.getElementById('game-board');
+
+    function gameSetup() {
+        document.getElementById('start-screen').style.display = 'none';
+        
+        const suits = ['m', 's', 'p'];
+        currentSuit = suits[Math.floor(Math.random() * suits.length)];
+
+        let deck = [];
+        for (let i = 0; i < 4; i++) {
+            for (let num = 1; num <= 9; num++) {
+                deck.push(num);
+            }
+        }
+        deck.sort(() => Math.random() - 0.5);
+
+        currentTurn = Math.random() < 0.5 ? 'player' : 'computer';
+
+        setupSlotsUI();
+
+        let idx = 0;
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                board[r][c] = createTileObj(r, c, deck[idx++]);
+            }
+        }
+
+        updateScoresUI();
+
+        if (currentTurn === 'computer') {
+            startComputerTurn();
+        } else {
+            startPlayerTurn();
+        }
+    }
+
+    function setupSlotsUI() {
+        boardEl.innerHTML = '';
+        slotTargets = [];
+        const stepW = boardEl.offsetWidth / COLS;
+        const stepH = boardEl.offsetHeight / ROWS;
+
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const slot = document.createElement('div');
+                slot.className = 'slot-target';
+                slot.style.width = `var(--tile-w)`;
+                slot.style.height = `var(--tile-h)`;
+                
+                const tx = c * stepW + (stepW * 0.04);
+                const ty = r * stepH + (stepH * 0.04);
+                slot.style.transform = `translate(${tx}px, ${ty}px)`;
+                
+                slot.onclick = () => handleSlotClick(r, c);
+                
+                boardEl.appendChild(slot);
+                slotTargets.push({ r, c, el: slot });
+            }
+        }
+    }
+
+    function createTileObj(r, c, val) {
+        const el = document.createElement('div');
+        el.className = 'tile facedown';
+        el.innerHTML = `<img src="${baseUrl}${val}${currentSuit}.svg">`;
+        boardEl.appendChild(el);
+        
+        const obj = { val, el, r, c, isFaceUp: false };
+        syncTileDOMPosition(obj);
+        
+        el.onclick = (e) => {
+            e.stopPropagation();
+            handleTileClick(obj);
+        };
+        return obj;
+    }
+
+    function syncTileDOMPosition(obj) {
+        const stepW = boardEl.offsetWidth / COLS;
+        const stepH = boardEl.offsetHeight / ROWS;
+        const tx = obj.c * stepW + (stepW * 0.04);
+        const ty = obj.r * stepH + (stepH * 0.04);
+        obj.el.style.setProperty('--tx', `${tx}px`);
+        obj.el.style.setProperty('--ty', `${ty}px`);
+        obj.el.style.transform = `translate(${tx}px, ${ty}px)`;
+    }
+
+    function startPlayerTurn() {
+        currentTurn = 'player';
+        gameState = 'playing';
+        updateTurnIndicatorUI('玩家回合', '#ff5722');
+        clearSelection();
+        refreshLockVisuals();
+    }
+
+    function handleTileClick(obj) {
+        if (currentTurn !== 'player' || gameState !== 'playing') return;
+        
+        if (!obj.isFaceUp) {
+            clearSelection();
+            revealTile(obj, 'player');
+            return;
+        }
+
+        if (obj === lastMovedTile) return; 
+
+        if (selectedTile && selectedTile.el === obj.el) {
+            clearSelection();
+            selectedTile = null;
+        } else {
+            clearSelection();
+            selectedTile = obj;
+            obj.el.classList.add('selected');
+            showLongRangeMoveHints(obj.r, obj.c);
+        }
+    }
+
+    async function revealTile(obj, side) {
+        gameState = 'busy';
+        obj.isFaceUp = true;
+        obj.el.classList.remove('facedown');
+        obj.el.classList.add('faceup');
+        
+        lastMovedTile = null; 
+        endActionAndCheckMatch(obj.r, obj.c, side);
+    }
+
+    // 計算直線方向上的無限格空格（被障礙阻擋即截止）
+    function showLongRangeMoveHints(startR, startC) {
+        const dirs = [[-1,0], [1,0], [0,-1], [0,1]];
+        dirs.forEach(([dr, dc]) => {
+            let nr = startR + dr;
+            let nc = startC + dc;
+            // 延著該方向一直往前搜尋，直到撞牆或撞到牌為止
+            while (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc] === null) {
+                const target = slotTargets.find(s => s.r === nr && s.c === nc);
+                if (target) target.el.classList.add('move-hint');
+                nr += dr;
+                nc += dc;
+            }
+        });
+    }
+
+    function handleSlotClick(r, c) {
+        if (currentTurn !== 'player' || gameState !== 'playing' || !selectedTile) return;
+        if (board[r][c] !== null) return;
+
+        // 驗證是否點擊在標示出的合法軌道高亮格上
+        const targetSlot = slotTargets.find(s => s.r === r && s.c === c);
+        if (!targetSlot || !targetSlot.el.classList.contains('move-hint')) return;
+
+        const obj = selectedTile;
+        board[obj.r][obj.c] = null;
+        
+        obj.r = r;
+        obj.c = c;
+        board[r][c] = obj;
+        
+        syncTileDOMPosition(obj);
+        lastMovedTile = obj; 
+
+        endActionAndCheckMatch(r, c, 'player');
+    }
+
+    function clearSelection() {
+        document.querySelectorAll('.tile').forEach(el => el.classList.remove('selected'));
+        slotTargets.forEach(s => s.el.classList.remove('move-hint'));
+    }
+
+    function refreshLockVisuals() {
+        document.querySelectorAll('.tile').forEach(el => el.classList.remove('locked'));
+        if (lastMovedTile && lastMovedTile.el) {
+            lastMovedTile.el.classList.add('locked');
+        }
+    }
+
+    async function endActionAndCheckMatch(r, c, side) {
+        gameState = 'busy';
+        clearSelection();
+
+        await new Promise(res => setTimeout(res, 260)); 
+
+        const curr = board[r][c];
+        if (!curr) { turnShift(); return; }
+
+        const dirs = [[-1,0], [1,0], [0,-1], [0,1]];
+        let matchPartner = null;
+
+        for (let [dr, dc] of dirs) {
+            const nr = r + dr;
+            const nc = c + dc;
+            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                const neighbor = board[nr][nc];
+                if (neighbor && neighbor.isFaceUp && (curr.val + neighbor.val === 10)) {
+                    matchPartner = neighbor;
+                    break; 
+                }
+            }
+        }
+
+        if (matchPartner) {
+            curr.el.classList.add('flashing');
+            matchPartner.el.classList.add('flashing');
+            
+            await new Promise(res => setTimeout(res, 480));
+
+            curr.el.classList.remove('flashing');
+            matchPartner.el.classList.remove('flashing');
+            curr.el.classList.add('shattering');
+            matchPartner.el.classList.add('shattering');
+            
+            board[curr.r][curr.c] = null;
+            board[matchPartner.r][matchPartner.c] = null;
+            
+            if (curr === lastMovedTile || matchPartner === lastMovedTile) {
+                lastMovedTile = null;
+            }
+
+            scores[side] += 2;
+            updateScoresUI();
+
+            await new Promise(res => setTimeout(res, 350));
+            curr.el.remove();
+            matchPartner.el.remove();
+        }
+
+        turnShift();
+    }
+
+    function turnShift() {
+        if (checkGameOverCondition()) {
+            handleGameOver();
+            return;
+        }
+
+        if (currentTurn === 'player') {
+            startComputerTurn();
+        } else {
+            startPlayerTurn();
+        }
+    }
+
+    // ================= 電腦 AI (支援長程長跑評估) =================
+    async function startComputerTurn() {
+        currentTurn = 'computer';
+        gameState = 'busy';
+        updateTurnIndicatorUI('電腦思考中', '#0288d1');
+        refreshLockVisuals();
+        
+        await new Promise(res => setTimeout(res, 800));
+
+        // 1. 移動亮牌：包含遠程移動後能否湊10
+        const bestMove = evaluateAIBestMove();
+        if (bestMove) {
+            const { obj, nr, nc } = bestMove;
+            board[obj.r][obj.c] = null;
+            obj.r = nr; obj.c = nc;
+            board[nr][nc] = obj;
+            
+            syncTileDOMPosition(obj);
+            lastMovedTile = obj; 
+            
+            endActionAndCheckMatch(nr, nc, 'computer');
+            return;
+        }
+
+        // 2. 盲翻蓋牌
+        const faceDownTiles = getFacedownTiles();
+        if (faceDownTiles.length > 0) {
+            const randomPick = faceDownTiles[Math.floor(Math.random() * faceDownTiles.length)];
+            lastMovedTile = null; 
+            revealTile(randomPick, 'computer');
+            return;
+        }
+
+        // 3. 隨機遠程移動亮牌
+        const allMoves = getAllLegalMoves();
+        if (allMoves.length > 0) {
+            const rMove = allMoves[Math.floor(Math.random() * allMoves.length)];
+            const obj = rMove.obj;
+            board[obj.r][obj.c] = null;
+            obj.r = rMove.nr; obj.c = rMove.nc;
+            board[rMove.nr][rMove.nc] = obj;
+            
+            syncTileDOMPosition(obj);
+            lastMovedTile = obj; 
+            endActionAndCheckMatch(rMove.nr, rMove.nc, 'computer');
+        } else {
+            lastMovedTile = null;
+            turnShift();
+        }
+    }
+
+    function evaluateAIBestMove() {
+        const moves = getAllLegalMoves();
+        const dirs = [[-1,0], [1,0], [0,-1], [0,1]];
+        for (let m of moves) {
+            for (let [dr, dc] of dirs) {
+                const checkR = m.nr + dr;
+                const checkC = m.nc + dc;
+                if (checkR === m.obj.r && checkC === m.obj.c) continue; 
+                if (checkR >= 0 && checkR < ROWS && checkC >= 0 && checkC < COLS) {
+                    const neighbor = board[checkR][checkC];
+                    if (neighbor && neighbor.isFaceUp && (m.obj.val + neighbor.val === 10)) {
+                        return m;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    // 計算出所有合法的長程移動路徑解
+    function getAllLegalMoves() {
+        const list = [];
+        const dirs = [[-1,0], [1,0], [0,-1], [0,1]];
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (board[r][c] !== null) {
+                    const obj = board[r][c];
+                    if (obj.isFaceUp && obj !== lastMovedTile) {
+                        for (let [dr, dc] of dirs) {
+                            let nr = r + dr;
+                            let nc = c + dc;
+                            // 延直線一直推進所有能滑到的格位
+                            while (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc] === null) {
+                                list.push({ obj, nr, nc });
+                                nr += dr;
+                                nc += dc;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return list;
+    }
+
+    function getFacedownTiles() {
+        const list = [];
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (board[r][c] !== null && !board[r][c].isFaceUp) {
+                    list.push(board[r][c]);
+                }
+            }
+        }
+        return list;
+    }
+
+    function checkGameOverCondition() {
+        if (getFacedownTiles().length > 0) return false;
+        if (getAllLegalMoves().length === 0) return true;
+
+        let remainingTiles = 0;
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (board[r][c] !== null) remainingTiles++;
+            }
+        }
+        return remainingTiles === 0;
+    }
+
+    function handleGameOver() {
+        let title = "";
+        if (scores.player > scores.computer) {
+            title = "🎉 戰勝電腦！真厲害！";
+        } else if (scores.player < scores.computer) {
+            title = "🤖 電腦獲勝！再試一把！";
+        } else {
+            title = "🤝 難分軒輊，雙方平手！";
+        }
+        document.getElementById('win-title').innerText = title;
+        document.getElementById('final-score').innerText = `最終得牌數：\n玩家：${scores.player} 張\n電腦：${scores.computer} 張`;
+        document.getElementById('over-screen').style.display = 'flex';
+    }
+
+    function updateScoresUI() {
+        document.getElementById('player-score').innerText = scores.player;
+        document.getElementById('computer-score').innerText = scores.computer;
+    }
+    function updateTurnIndicatorUI(text, bgColor) {
+        const ind = document.getElementById('turn-indicator');
+        ind.innerText = text;
+        ind.style.background = bgColor;
+    }
+
+    document.body.onclick = (e) => {
+        if (gameState === 'playing' && currentTurn === 'player') {
+            clearSelection();
+            selectedTile = null;
+        }
+    };
+</script>
+</body>
+</html>
