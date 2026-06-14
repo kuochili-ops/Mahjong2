@@ -3,22 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>麻將十點半對決 (極簡手遊介面版)</title>
+    <title>麻將十點半對決 (動態開局優化版)</title>
     <style>
         :root {
             --bg-color: #123c10;
             --gap: 4px;
-            --tile-h: 7.8vh; 
-            --tile-w: calc(var(--tile-h) * 0.76); 
             --base-url: "https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/Vectors%20%E7%9F%A2%E9%87%8F%E5%9B%BE/SVG/";
-        }
-        
-        @media (max-aspect-ratio: 1:2) and (max-width: 450px) {
-            :root {
-                --tile-w: 21vw;
-                --tile-h: calc(var(--tile-w) * 1.31);
-                --gap: 1vw;
-            }
+            --tile-w: 70px;
+            --tile-h: 92px;
         }
 
         * {
@@ -34,51 +26,52 @@
             display: flex; 
             flex-direction: column; 
             align-items: center;
-            justify-content: center; /* 讓棋盤置中 */
+            justify-content: center; 
             height: 100vh; 
             height: 100dvh; 
-            padding: 10px 5px;
+            padding: 10px 6px;
             touch-action: manipulation; 
             font-family: "Microsoft JhengHei", -apple-system, sans-serif;
             color: #fff;
             overflow: hidden; 
         }
 
-        /* 4x9 棋盤主體 */
+        /* 整合式大牌盤外框 */
         .board {
-            position: relative;
-            width: calc(var(--tile-w) * 4 + var(--gap) * 5);
-            height: calc(var(--tile-h) * 9 + var(--gap) * 10);
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 450px;
+            height: 100%; 
             background: #091f09; 
             border-radius: 12px; 
-            box-shadow: inset 0 0 15px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.5);
-            flex-grow: 0;
-            flex-shrink: 0;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.8), 0 5px 20px rgba(0,0,0,0.6);
+            padding: 8px;
+            overflow: hidden;
         }
 
-        /* 半透明動態狀態面板（懸浮於牌盤上方） */
+        /* 頂部半透明狀態列 */
         .score-panel {
-            position: absolute;
-            top: 6px;
-            left: 6px;
-            right: 6px;
+            width: 100%;
+            height: 46px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(0, 0, 0, 0.65); /* 半透明黑 */
-            backdrop-filter: blur(4px); /* 毛玻璃特效 */
+            background: rgba(0, 0, 0, 0.5); 
+            backdrop-filter: blur(4px); 
             -webkit-backdrop-filter: blur(4px);
-            padding: 6px 12px;
+            padding: 4px 12px;
             border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 100; /* 確保浮在最上方 */
-            pointer-events: none; /* 穿透點擊，不擋住下方的牌 */
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 6px;
+            flex-shrink: 0; 
         }
         .score-box {
             display: flex;
             flex-direction: column;
             align-items: center;
             font-size: 0.75rem;
+            line-height: 1.2;
         }
         .score-box span:nth-child(2) {
             font-size: 1.15rem;
@@ -89,50 +82,58 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 3px;
+            gap: 2px;
         }
         #turn-indicator {
             background: #ff5722;
-            padding: 2px 10px;
-            border-radius: 12px;
+            padding: 1px 12px;
+            border-radius: 10px;
             font-weight: bold;
-            font-size: 0.8rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            font-size: 0.85rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
             transition: background 0.3s;
         }
         #sudden-death-counter {
-            font-size: 0.68rem;
+            font-size: 0.65rem;
             background: #d32f2f;
             color: #fff;
             padding: 1px 6px;
-            border-radius: 8px;
+            border-radius: 6px;
             font-weight: bold;
             display: none; 
             animation: pulse 1s infinite alternate;
         }
         @keyframes pulse {
-            0% { transform: scale(0.95); opacity: 0.8; }
-            100% { transform: scale(1.05); opacity: 1; }
+            0% { transform: scale(0.96); opacity: 0.8; }
+            100% { transform: scale(1.04); opacity: 1; }
         }
 
-        /* 麻將牌 */
+        /* 網格區塊 */
+        .grid-container {
+            position: relative;
+            width: 100%;
+            flex-grow: 1; 
+            margin: 0 auto;
+        }
+
+        /* 麻將牌基礎 */
         .tile {
             position: absolute; 
             width: var(--tile-w); 
             height: var(--tile-h);
             background: #fff; 
-            border-radius: 5px;
-            box-shadow: 0 3px 0 #bbb, 0 3px 5px rgba(0,0,0,0.3);
+            border-radius: 6px;
+            box-shadow: 0 3px 0 #bbb, 0 3px 6px rgba(0,0,0,0.3);
             display: flex; 
             align-items: center; 
             justify-content: center;
-            transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s, filter 0.2s;
+            transition: transform 0.24s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.18s, filter 0.18s;
             z-index: 5; 
             cursor: pointer;
         }
         .tile img { 
-            width: 82%; 
-            height: 82%; 
+            width: 84%; 
+            height: 84%; 
             pointer-events: none; 
             display: none; 
         }
@@ -140,42 +141,31 @@
         .tile.facedown {
             background: linear-gradient(135deg, #00796b 0%, #004d40 100%);
             border: 1px solid #004d40;
-            box-shadow: 0 3px 0 #00332c, 0 3px 5px rgba(0,0,0,0.4);
+            box-shadow: 0 3px 0 #00332c, 0 3px 6px rgba(0,0,0,0.4);
         }
         .tile.facedown::after {
             content: "𓃥";
-            font-size: 1.3rem;
-            color: rgba(255, 235, 59, 0.4);
+            font-size: 1.4rem;
+            color: rgba(255, 235, 59, 0.35);
         }
 
-        .tile.faceup img {
-            display: block;
-        }
+        .tile.faceup img { display: block; }
+        .tile.selected { box-shadow: 0 0 12px #ffeb3b, 0 3px 0 #bbb; z-index: 20; filter: brightness(1.1); }
+        .tile.locked { filter: grayscale(0.6) brightness(0.75); cursor: not-allowed; box-shadow: 0 3px 0 #aaa, inset 0 0 6px rgba(244, 67, 54, 0.4); }
 
-        .tile.selected { 
-            box-shadow: 0 0 10px #ffeb3b, 0 3px 0 #bbb; 
-            z-index: 20; 
-            filter: brightness(1.1);
-        }
-
-        .tile.locked {
-            filter: grayscale(0.6) brightness(0.75);
-            cursor: not-allowed;
-            box-shadow: 0 3px 0 #aaa, inset 0 0 6px rgba(244, 67, 54, 0.4);
-        }
-
+        /* 消除與粉碎特效 */
         .flashing {
-            animation: borderFlash 0.15s ease-in-out 3; 
+            animation: borderFlash 0.14s ease-in-out 3; 
             z-index: 25;
             pointer-events: none;
         }
         @keyframes borderFlash {
             0%, 100% { box-shadow: 0 0 4px #ffeb3b, 0 3px 0 #bbb; filter: brightness(1); }
-            50% { box-shadow: 0 0 20px #ffeb3b, inset 0 0 12px #ffeb3b; filter: brightness(1.4); }
+            50% { box-shadow: 0 0 18px #ffeb3b, inset 0 0 10px #ffeb3b; filter: brightness(1.4); }
         }
 
         .shattering {
-            animation: shatterInPlace 0.35s ease-out forwards;
+            animation: shatterInPlace 0.32s ease-out forwards;
             pointer-events: none; 
             z-index: 30;
         }
@@ -184,7 +174,7 @@
             100% { transform: translate(var(--tx), var(--ty)) scale(0.3); opacity: 0; filter: blur(3px); }
         }
 
-        /* 插槽提示 */
+        /* 軌道提示插槽 */
         .slot-target {
             position: absolute; 
             width: var(--tile-w); 
@@ -196,27 +186,82 @@
         .slot-target.move-hint {
             background: rgba(76, 175, 80, 0.25);
             border: 2px solid #4caf50;
-            border-radius: 5px;
+            border-radius: 6px;
             z-index: 15;
         }
 
-        /* 彈窗畫面 */
+        /* 頂層全新首頁遮罩 */
         #start-screen, #over-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
+            background: rgba(0,0,0,0.88); display: flex; flex-direction: column;
             align-items: center; justify-content: center; z-index: 1000; color: white;
+            transition: opacity 0.4s ease;
         }
         .menu-box { 
             background: #193d1b; 
-            padding: 20px; 
-            border-radius: 12px; 
+            padding: 22px; 
+            border-radius: 16px; 
             border: 2px solid #ffc107; 
             text-align: center;
-            max-width: 85%;
-            box-shadow: 0 6px 15px rgba(0,0,0,0.5);
+            max-width: 88%;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.6);
         }
-        .menu-box h2 { margin-bottom: 6px; font-size: 1.3rem; }
-        .menu-box p { margin-bottom: 15px; color: #ccc; font-size: 0.85rem; line-height: 1.4;}
+        .menu-box h2 { margin-bottom: 6px; font-size: 1.35rem; text-shadow: 1px 1px 3px #000; }
+        .menu-box p { margin-bottom: 16px; color: #ddd; font-size: 0.82rem; line-height: 1.45; text-align: left;}
+        
+        /* 首頁隨機抽卡展示容器 */
+        .suit-lottery-container {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 15px 0 20px 0;
+        }
+        .lottery-card {
+            width: 65px;
+            height: 86px;
+            background: #fff;
+            border-radius: 6px;
+            box-shadow: 0 3px 0 #bbb;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.1s ease;
+            border: 3px solid transparent;
+        }
+        .lottery-card img {
+            width: 84%; height: 84%;
+        }
+        /* 抽籤跑馬燈高亮框 */
+        .lottery-card.active-light {
+            border-color: #ffeb3b;
+            box-shadow: 0 0 15px #ffeb3b, 0 3px 0 #bbb;
+            transform: scale(1.06);
+            filter: brightness(1.1);
+        }
+
+        .btn-action {
+            background: linear-gradient(180deg, #4caf50, #388e3c);
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            font-size: 1.05rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #2e7d32;
+            transition: all 0.1s;
+            width: 100%;
+        }
+        .btn-action:active:not(:disabled) {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #2e7d32;
+        }
+        .btn-action:disabled {
+            background: #616161;
+            box-shadow: 0 4px 0 #424242;
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -224,12 +269,20 @@
 <div id="start-screen">
     <div class="menu-box">
         <h2>𓃥 麻將十點半對決</h2>
-        <p>【盲翻與無限格移動玩法】<br>
-        1. <b>盲抽翻牌</b>：任意點擊一張蓋牌將其翻開，與相鄰牌湊成 10 即消除得分。<br>
-        2. <b>長程推牌</b>：只要同一直線上無阻擋，亮牌可移動任意格數！<br>
-        3. <b>殘局終結機制</b>：當所有牌被翻開後，將啟動<b>「15步進攻倒數」</b>，若連續15步沒有發生任何消除，對局將強制和平終止，防範無限互相迴避！
+        <p style="text-align: center; color: #ffeb3b; font-weight: bold; margin-bottom: 8px;">【盲翻與無限格滑行版】</p>
+        <p>1. <b>盲抽翻牌</b>：點擊暗色蓋牌將其翻開，與相鄰正面牌湊成 10 即消除得分。<br>
+           2. <b>長程推牌</b>：產生空位後可點擊亮牌，直線無阻擋可移動任意格數！<br>
+           3. <b>反向鎖定</b>：對方剛移動過的牌，你下一手暫時無法推動牠。<br>
+           4. <b>進攻倒數</b>：全翻開後啟動 15 步倒數，消除可重置，嚴防無限互躲。
         </p>
-        <button class="btn" style="background: linear-gradient(180deg, #4caf50, #388e3c); color:white; border:none; padding:10px 20px; font-size:1rem; font-weight:bold; border-radius:6px; cursor:pointer;" onclick="gameSetup()">進入對局</button>
+        
+        <div class="suit-lottery-container">
+            <div class="lottery-card" id="card-p"><img src="https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/Vectors%20%E7%9F%A2%E9%87%8F%E5%9B%BE/SVG/1p.svg"></div>
+            <div class="lottery-card" id="card-s"><img src="https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/Vectors%20%E7%9F%A2%E9%87%8F%E5%9B%BE/SVG/1s.svg"></div>
+            <div class="lottery-card" id="card-m"><img src="https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/Vectors%20%E7%9F%A2%E9%87%8F%E5%9B%BE/SVG/1m.svg"></div>
+        </div>
+
+        <button id="start-game-btn" class="btn-action" onclick="startLotteryDraw()">進入對局</button>
     </div>
 </div>
 
@@ -248,13 +301,14 @@
             <span id="computer-score">0</span>
         </div>
     </div>
+    <div id="grid-area" class="grid-container"></div>
 </div>
 
 <div id="over-screen" style="display:none;">
     <div class="menu-box">
         <h2 id="win-title">遊戲結束</h2>
-        <p id="final-score"></p>
-        <button class="btn" style="background: linear-gradient(180deg, #4caf50, #388e3c); color:white; border:none; padding:10px 20px; font-size:1rem; font-weight:bold; border-radius:6px; cursor:pointer; width:100%;" onclick="location.reload()">再玩一次</button>
+        <p id="final-score" style="text-align:center; margin: 10px 0;"></p>
+        <button class="btn-action" onclick="location.reload()">再玩一次</button>
     </div>
 </div>
 
@@ -262,7 +316,7 @@
     const ROWS = 9, COLS = 4; 
     const baseUrl = "https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/Vectors%20%E7%9F%A2%E9%87%8F%E5%9B%BE/SVG/";
     
-    let currentSuit = 'm';
+    let currentSuit = 'm'; // 最終決定的花色
     let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
     
     let scores = { player: 0, computer: 0 };
@@ -276,13 +330,94 @@
     let isForcedEnd = false; 
 
     const boardEl = document.getElementById('game-board');
+    const gridAreaEl = document.getElementById('grid-area');
 
+    // --- 首頁隨機抽籤跑馬燈邏輯 ---
+    const suitsArray = ['p', 's', 'm']; // 筒(p), 索(s), 萬(m)
+    let lotteryIndex = 0;
+    let lotteryIntervalId = null;
+
+    // 開啟首頁時即啟動無限高速輪流閃爍 (每 150 毫秒切換一次)
+    function startMenuIdleFlash() {
+        lotteryIntervalId = setInterval(() => {
+            document.querySelectorAll('.lottery-card').forEach(c => c.classList.remove('active-light'));
+            lotteryIndex = (lotteryIndex + 1) % suitsArray.length;
+            const currentSuitKey = suitsArray[lotteryIndex];
+            document.getElementById(`card-${currentSuitKey}`).classList.add('active-light');
+        }, 150);
+    }
+
+    // 呼叫跑馬燈閒置閃爍
+    startMenuIdleFlash();
+
+    // 玩家點選「進入對局」後，啟動減速抽籤
+    function startLotteryDraw() {
+        clearInterval(lotteryIntervalId); // 取消高速定時器
+        document.getElementById('start-game-btn').disabled = true; // 鎖定按鈕
+
+        let currentDelay = 150; // 初始速度
+        const maxDelay = 750;   // 減速上限
+        const targetSuit = suitsArray[Math.floor(Math.random() * suitsArray.length)]; // 預先決定最終結果
+
+        function slowDownTick() {
+            // 清除前一個高亮
+            document.querySelectorAll('.lottery-card').forEach(c => c.classList.remove('active-light'));
+            
+            // 下一個高亮
+            lotteryIndex = (lotteryIndex + 1) % suitsArray.length;
+            const currentSuitKey = suitsArray[lotteryIndex];
+            document.getElementById(`card-${currentSuitKey}`).classList.add('active-light');
+
+            // 判斷是否達到慢速極限且正好落在隨機抽中的花色上
+            if (currentDelay >= maxDelay && currentSuitKey === targetSuit) {
+                // 定格成功！放大劇烈閃爍一下後，開局
+                currentSuit = targetSuit; 
+                setTimeout(() => {
+                    document.getElementById('start-screen').style.opacity = '0';
+                    setTimeout(() => {
+                        document.getElementById('start-screen').style.display = 'none';
+                        gameSetup(); // 載入遊戲
+                    }, 400);
+                }, 600);
+            } else {
+                // 否則繼續乘算減速，並遞迴下一幀
+                currentDelay = currentDelay * 1.35; 
+                if (currentDelay > maxDelay) currentDelay = maxDelay; // 到殘局以最慢速滾動尋找目標
+                setTimeout(slowDownTick, currentDelay);
+            }
+        }
+
+        slowDownTick();
+    }
+
+    // --- 核心安全尺寸演算法 ---
+    function calculateTileVariables() {
+        const gap = varValue('--gap');
+        const containerW = gridAreaEl.offsetWidth;
+        const containerH = gridAreaEl.offsetHeight;
+
+        let tileW_byWidth = (containerW - (gap * (COLS + 1))) / COLS;
+        let tileH_byWidth = tileW_byWidth * 1.32;
+
+        let tileH_byHeight = (containerH - (gap * (ROWS - 1))) / ROWS;
+        let tileW_byHeight = tileH_byHeight / 1.32;
+
+        let finalW = Math.min(tileW_byWidth, tileW_byHeight);
+        let finalH = finalW * 1.32;
+
+        document.documentElement.style.setProperty('--tile-w', `${finalW}px`);
+        document.documentElement.style.setProperty('--tile-h', `${finalH}px`);
+
+        gridAreaEl.style.width = `${(finalW * COLS) + (gap * (COLS + 1))}px`;
+        gridAreaEl.style.height = `${(finalH * ROWS) + (gap * (ROWS - 1))}px`;
+    }
+
+    function varValue(varName) {
+        return parseFloat(getComputedStyle(document.documentElement).getPropertyValue(varName));
+    }
+
+    // --- 遊戲對局初始化 ---
     function gameSetup() {
-        document.getElementById('start-screen').style.display = 'none';
-        
-        const suits = ['m', 's', 'p'];
-        currentSuit = suits[Math.floor(Math.random() * suits.length)];
-
         let deck = [];
         for (let i = 0; i < 4; i++) {
             for (let num = 1; num <= 9; num++) {
@@ -293,6 +428,7 @@
 
         currentTurn = Math.random() < 0.5 ? 'player' : 'computer';
 
+        calculateTileVariables();
         setupSlotsUI();
 
         let idx = 0;
@@ -312,14 +448,11 @@
     }
 
     function setupSlotsUI() {
-        // 保留原本就在裡面的 score-panel
-        const panel = boardEl.querySelector('.score-panel');
-        boardEl.innerHTML = '';
-        boardEl.appendChild(panel);
-
+        gridAreaEl.innerHTML = '';
         slotTargets = [];
-        const stepW = boardEl.offsetWidth / COLS;
-        const stepH = boardEl.offsetHeight / ROWS;
+        
+        const stepW = varValue('--tile-w') + varValue('--gap');
+        const stepH = varValue('--tile-h') + varValue('--gap');
 
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
@@ -328,13 +461,13 @@
                 slot.style.width = `var(--tile-w)`;
                 slot.style.height = `var(--tile-h)`;
                 
-                const tx = c * stepW + (stepW * 0.04);
-                const ty = r * stepH + (stepH * 0.04);
+                const tx = c * stepW + varValue('--gap');
+                const ty = r * stepH; 
                 slot.style.transform = `translate(${tx}px, ${ty}px)`;
                 
                 slot.onclick = () => handleSlotClick(r, c);
                 
-                boardEl.appendChild(slot);
+                gridAreaEl.appendChild(slot);
                 slotTargets.push({ r, c, el: slot });
             }
         }
@@ -344,7 +477,7 @@
         const el = document.createElement('div');
         el.className = 'tile facedown';
         el.innerHTML = `<img src="${baseUrl}${val}${currentSuit}.svg">`;
-        boardEl.appendChild(el);
+        gridAreaEl.appendChild(el);
         
         const obj = { val, el, r, c, isFaceUp: false };
         syncTileDOMPosition(obj);
@@ -357,10 +490,10 @@
     }
 
     function syncTileDOMPosition(obj) {
-        const stepW = boardEl.offsetWidth / COLS;
-        const stepH = boardEl.offsetHeight / ROWS;
-        const tx = obj.c * stepW + (stepW * 0.04);
-        const ty = obj.r * stepH + (stepH * 0.04);
+        const stepW = varValue('--tile-w') + varValue('--gap');
+        const stepH = varValue('--tile-h') + varValue('--gap');
+        const tx = obj.c * stepW + varValue('--gap');
+        const ty = obj.r * stepH;
         obj.el.style.setProperty('--tx', `${tx}px`);
         obj.el.style.setProperty('--ty', `${ty}px`);
         obj.el.style.transform = `translate(${tx}px, ${ty}px)`;
@@ -439,9 +572,7 @@
         lastMovedTile = obj; 
 
         let isMoveConsumed = (getFacedownTiles().length === 0);
-        if (isMoveConsumed) {
-            endgameMovesLeft--;
-        }
+        if (isMoveConsumed) endgameMovesLeft--;
 
         endActionAndCheckMatch(r, c, 'player', isMoveConsumed);
     }
@@ -463,9 +594,7 @@
         if (getFacedownTiles().length === 0) {
             countIndicator.style.display = 'block';
             countIndicator.innerText = `進攻倒數: ${endgameMovesLeft}步`;
-            if (endgameMovesLeft <= 0) {
-                isForcedEnd = true;
-            }
+            if (endgameMovesLeft <= 0) isForcedEnd = true;
         } else {
             countIndicator.style.display = 'none';
         }
@@ -509,13 +638,10 @@
             board[curr.r][curr.c] = null;
             board[matchPartner.r][matchPartner.c] = null;
             
-            if (curr === lastMovedTile || matchPartner === lastMovedTile) {
-                lastMovedTile = null;
-            }
+            if (curr === lastMovedTile || matchPartner === lastMovedTile) lastMovedTile = null;
 
             scores[side] += 2;
             updateScoresUI();
-
             endgameMovesLeft = 15;
 
             await new Promise(res => setTimeout(res, 350));
@@ -532,12 +658,7 @@
             handleGameOver();
             return;
         }
-
-        if (currentTurn === 'player') {
-            startComputerTurn();
-        } else {
-            startPlayerTurn();
-        }
+        if (currentTurn === 'player') startComputerTurn(); else startPlayerTurn();
     }
 
     async function startComputerTurn() {
@@ -549,10 +670,7 @@
         
         await new Promise(res => setTimeout(res, 800));
 
-        if (isForcedEnd) {
-            turnShift();
-            return;
-        }
+        if (isForcedEnd) { turnShift(); return; }
 
         const bestMove = evaluateAIBestMove();
         if (bestMove) {
@@ -606,9 +724,7 @@
                 if (checkR === m.obj.r && checkC === m.obj.c) continue; 
                 if (checkR >= 0 && checkR < ROWS && checkC >= 0 && checkC < COLS) {
                     const neighbor = board[checkR][checkC];
-                    if (neighbor && neighbor.isFaceUp && (m.obj.val + neighbor.val === 10)) {
-                        return m;
-                    }
+                    if (neighbor && neighbor.isFaceUp && (m.obj.val + neighbor.val === 10)) return m;
                 }
             }
         }
@@ -624,12 +740,10 @@
                     const obj = board[r][c];
                     if (obj.isFaceUp && obj !== lastMovedTile) {
                         for (let [dr, dc] of dirs) {
-                            let nr = r + dr;
-                            let nc = c + dc;
+                            let nr = r + dr; let nc = c + dc;
                             while (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc] === null) {
                                 list.push({ obj, nr, nc });
-                                nr += dr;
-                                nc += dc;
+                                nr += dr; nc += dc;
                             }
                         }
                     }
@@ -643,9 +757,7 @@
         const list = [];
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
-                if (board[r][c] !== null && !board[r][c].isFaceUp) {
-                    list.push(board[r][c]);
-                }
+                if (board[r][c] !== null && !board[r][c].isFaceUp) list.push(board[r][c]);
             }
         }
         return list;
@@ -655,12 +767,9 @@
         if (isForcedEnd) return true;
         if (getFacedownTiles().length > 0) return false;
         if (getAllLegalMoves().length === 0) return true;
-
         let remainingTiles = 0;
         for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                if (board[r][c] !== null) remainingTiles++;
-            }
+            for (let c = 0; c < COLS; c++) { if (board[r][c] !== null) remainingTiles++; }
         }
         return remainingTiles === 0;
     }
@@ -668,14 +777,9 @@
     function handleGameOver() {
         let title = "";
         let suffix = isForcedEnd ? " (因長久未消除觸發和平結算)" : "";
-
-        if (scores.player > scores.computer) {
-            title = "🎉 戰勝電腦！真厲害！" + suffix;
-        } else if (scores.player < scores.computer) {
-            title = "🤖 電腦獲勝！再試一把！" + suffix;
-        } else {
-            title = "🤝 難分軒輊，雙方平手！" + suffix;
-        }
+        if (scores.player > scores.computer) title = "🎉 戰勝電腦！真厲害！" + suffix;
+        else if (scores.player < scores.computer) title = "🤖 電腦獲勝！再試一把！" + suffix;
+        else title = "🤝 難分軒輊，雙方平手！" + suffix;
         document.getElementById('win-title').innerText = title;
         document.getElementById('final-score').innerText = `最終得牌數：\n玩家：${scores.player} 張\n電腦：${scores.computer} 張`;
         document.getElementById('over-screen').style.display = 'flex';
@@ -687,9 +791,18 @@
     }
     function updateTurnIndicatorUI(text, bgColor) {
         const ind = document.getElementById('turn-indicator');
-        ind.innerText = text;
-        ind.style.background = bgColor;
+        ind.innerText = text; ind.style.background = bgColor;
     }
+
+    window.addEventListener('resize', () => {
+        if (gameState !== 'busy' && document.getElementById('start-screen').style.display === 'none') {
+            calculateTileVariables();
+            setupSlotsUI();
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) { if (board[r][c]) syncTileDOMPosition(board[r][c]); }
+            }
+        }
+    });
 
     document.body.onclick = (e) => {
         if (gameState === 'playing' && currentTurn === 'player') {
